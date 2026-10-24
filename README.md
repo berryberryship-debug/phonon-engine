@@ -24,10 +24,26 @@ Il est né d'une exploration théorique sur les tachyons et les ordinateurs quan
 
 Nécessite Python 3.9+ (testé avec NumPy et Matplotlib récents).
 
-```bash
-# Cloner le dépôt
-git clone https://github.com/berryberryship-debug/phonon-engine.git
-cd phonon-engine
+    # Cloner le dépôt
+    git clone https://github.com/berryberryship-debug/phonon-engine.git
+    cd phonon-engine
 
-# Lancer le pipeline complet (Génération + Validations)
-python run_all.py
+    # Lancer le pipeline complet (Génération + Validations)
+    python run_all.py
+
+Le pipeline exécute séquentiellement :
+1. `v57_production_501.py` : Calcul, export CSV et génération du graphique PNG.
+2. `v60_validate_artifacts.py` : Vérification structurelle des fichiers générés (taille, format, point critique).
+3. `v58_regression_test.py` : 14 tests de régression validant la cohérence numérique (symétrie, monotonie, mode de Goldstone, vitesses de groupe).
+
+## 📈 Résultats
+
+- `phonon_dispersion_501.csv` : Tableau de 501 lignes avec q, ω_aco, ω_opt, v_g_aco, v_g_opt.
+- `phonon_curves_501.png` : Graphique des branches de dispersion et des vitesses de groupe.
+
+## ⚠️ Portée et limites
+
+Les tests vérifient la cohérence numérique interne de l'implémentation pour les propriétés contrôlées du modèle idéal. Ils ne constituent pas une validation expérimentale ni une preuve que les paramètres représentent un matériau réel.
+
+---
+*Développé et validé sur Termux (Android) via un processus itératif de développement et de relecture critique.*

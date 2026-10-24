@@ -6,17 +6,17 @@ Il est né d'une exploration théorique sur les tachyons et les ordinateurs quan
 
 ## 🚀 Fonctionnalités
 
-- **Modèle physique** : Chaîne diatomique 1D avec masses \(m_1\), \(m_2\) et ressort de raideur \(k\).
-- **Calculs** : Formules analytiques rationalisées pour éviter l'annulation catastrophique près de \(q=0\).
+- **Modèle physique** : Chaîne diatomique 1D avec masses m1, m2 et ressort de raideur k.
+- **Calculs** : Formules analytiques rationalisées pour éviter l'annulation catastrophique près de q=0.
 - **Robustesse** : Testé avec 14 assertions de régression (symétrie, monotonie, mode de Goldstone, cohérence des vitesses de groupe).
 - **Exports** : Génération des données en `.csv` et des graphiques en `.png`.
 
 ## 📊 Paramètres Physiques
 
-- Masses : \(m_1 = 2.0\) uma, \(m_2 = 4.0\) uma
-- Constante de raideur : \(k = 10.0\) N/m
-- Paramètre de maille : \(a = 5.0 \times 10^{-10}\) m
-- Nombre de points : 501 (inclut exactement \(q=0\))
+- Masses : m1 = 2.0 uma, m2 = 4.0 uma
+- Constante de raideur : k = 10.0 N/m
+- Paramètre de maille : a = 5.0 × 10⁻¹⁰ m
+- Nombre de points : 501 (inclut exactement q=0)
 
 *Note : Ces paramètres sont illustratifs et ne constituent pas un ajustement à un matériau expérimental particulier.*
 

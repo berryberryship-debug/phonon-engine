@@ -11,17 +11,18 @@ M1 = 132.90545196 * U
 M2 = 35.45 * U
 A = 4.12e-10
 
-# LIGNE 14 : La raideur transverse qui explique l'écart de v_TA
 K1_PARALLEL, K1_PERP = 10.0, 2.0
-K2_PARALLEL, K2_PERP = 4.0, 1.0 
+K2_PARALLEL, K2_PERP = 4.0, 1.0
 I3 = np.eye(3)
 
+# Premiers voisins (8 atomes de Cl autour de Cs)
 NEIGHBORS_1 = []
 for sx, sy, sz in product((-1, 1), repeat=3):
     R = 0.5 * A * np.array([sx, sy, sz], dtype=float)
     P = np.outer(R / np.linalg.norm(R), R / np.linalg.norm(R))
     NEIGHBORS_1.append((R, K1_PERP * I3 + (K1_PARALLEL - K1_PERP) * P))
 
+# Seconds voisins (6 atomes le long des axes)
 NEIGHBORS_2 = []
 for axis in range(3):
     for sign in [-1, 1]:
@@ -34,12 +35,14 @@ def dynamical_matrix(q):
     Dbb = np.zeros((3, 3), dtype=complex)
     Dab = np.zeros((3, 3), dtype=complex)
     
+    # Interaction A-B (premiers voisins)
     for R, K in NEIGHBORS_1:
         phase = np.exp(1j * np.dot(q, R))
         Daa += K / M1
         Dbb += K / M2
         Dab += -K * phase / np.sqrt(M1 * M2)
         
+    # Interaction A-A et B-B (seconds voisins)
     for R, K in NEIGHBORS_2:
         phase = np.exp(1j * np.dot(q, R))
         Daa += K * (1.0 - phase) / M1
@@ -51,3 +54,27 @@ def dynamical_matrix(q):
     D[3:, :3] = Dab.conj().T
     D[3:, 3:] = Dbb
     return D
+
+def run_audits():
+    print("=== V72 : AUDITS ===")
+    
+    # 1. Test de la règle de somme acoustique à Gamma
+    D0 = dynamical_matrix(np.zeros(3))
+    norm_D = np.linalg.norm(D0, 2)
+    u_x = np.array([1, 0, 0, 1, 0, 0], dtype=float)
+    e = np.zeros(6)
+    e[:3] = np.sqrt(M1) * u_x[:3]
+    e[3:] = np.sqrt(M2) * u_x[3:]
+    e = e / np.linalg.norm(e)
+    res = np.linalg.norm(D0 @ e) / max(norm_D, 1e-30)
+    assert res < 1e-12, f"[FAIL] Règle de somme violée (résidu = {res:.2e})"
+    print(f"[PASS] Règle de somme acoustique (résidu = {res:.4e})")
+
+    # 2. Test d'hermicité sur un point q non trivial
+    q_test = np.array([0.1, 0.2, 0.3]) * 1e9
+    D = dynamical_matrix(q_test)
+    assert np.allclose(D, D.conj().T), "[FAIL] La matrice n'est pas hermitienne."
+    print("[PASS] Matrice dynamique hermitienne.")
+
+if __name__ == "__main__":
+    run_audits()

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-V72 — Moteur enrichi avec les seconds voisins (Cs-Cs et Cl-Cl).
+V72 — Moteur enrichi avec les seconds voisins (Cs-Cs et Cl-Cl séparés).
+Inclut les fonctions utilitaires (frequencies, build_q_path) pour remplacer V61.
 """
 
 from itertools import product
@@ -11,11 +12,16 @@ M1 = 132.90545196 * U
 M2 = 35.45 * U
 A = 4.12e-10
 
+# --- Paramètres des premiers voisins (Cs-Cl) ---
 K1_PARALLEL, K1_PERP = 10.0, 2.0
-K2_PARALLEL, K2_PERP = 4.0, 1.0
+
+# --- Paramètres des seconds voisins (Séparés) ---
+K2_CS_CS_PARALLEL, K2_CS_CS_PERP = 4.0, 1.0
+K2_CL_CL_PARALLEL, K2_CL_CL_PERP = 4.0, 1.0
+
 I3 = np.eye(3)
 
-# --- Premiers voisins (8 atomes de Cl autour de Cs) ---
+# --- Premiers voisins ---
 NEIGHBORS_1 = []
 for sx, sy, sz in product((-1, 1), repeat=3):
     R = 0.5 * A * np.array([sx, sy, sz], dtype=float)
@@ -24,16 +30,21 @@ for sx, sy, sz in product((-1, 1), repeat=3):
     K = K1_PERP * I3 + (K1_PARALLEL - K1_PERP) * P
     NEIGHBORS_1.append((R, K))
 
-# --- Seconds voisins (6 atomes le long des axes) ---
-NEIGHBORS_2 = []
+# --- Seconds voisins (Cs-Cs et Cl-Cl) ---
+NEIGHBORS_2_CS_CS = []
+NEIGHBORS_2_CL_CL = []
 for axis in range(3):
-    for sign in [-1, 1]:
+    for sign in (-1, 1):
         R = np.zeros(3)
         R[axis] = sign * A
         norm_R = np.linalg.norm(R)
         P = np.outer(R / norm_R, R / norm_R)
-        K = K2_PERP * I3 + (K2_PARALLEL - K2_PERP) * P
-        NEIGHBORS_2.append((R, K))
+
+        K_cs_cs = K2_CS_CS_PERP * I3 + (K2_CS_CS_PARALLEL - K2_CS_CS_PERP) * P
+        K_cl_cl = K2_CL_CL_PERP * I3 + (K2_CL_CL_PARALLEL - K2_CL_CL_PERP) * P
+
+        NEIGHBORS_2_CS_CS.append((R, K_cs_cs))
+        NEIGHBORS_2_CL_CL.append((R, K_cl_cl))
 
 def dynamical_matrix(q):
     q = np.asarray(q, dtype=float)
@@ -41,15 +52,21 @@ def dynamical_matrix(q):
     Dbb = np.zeros((3, 3), dtype=complex)
     Dab = np.zeros((3, 3), dtype=complex)
     
+    # Premiers voisins (Cs-Cl)
     for R, K in NEIGHBORS_1:
         phase = np.exp(1j * np.dot(q, R))
         Daa += K / M1
         Dbb += K / M2
         Dab += -K * phase / np.sqrt(M1 * M2)
         
-    for R, K in NEIGHBORS_2:
+    # Seconds voisins (Cs-Cs)
+    for R, K in NEIGHBORS_2_CS_CS:
         phase = np.exp(1j * np.dot(q, R))
         Daa += K * (1.0 - phase) / M1
+
+    # Seconds voisins (Cl-Cl)
+    for R, K in NEIGHBORS_2_CL_CL:
+        phase = np.exp(1j * np.dot(q, R))
         Dbb += K * (1.0 - phase) / M2
         
     D = np.zeros((6, 6), dtype=complex)
@@ -59,6 +76,52 @@ def dynamical_matrix(q):
     D[3:, 3:] = Dbb
     return D
 
+def frequencies(q, tolerance=1e-12):
+    D = dynamical_matrix(q)
+    eigvals = np.linalg.eigvalsh(D)
+    scale = max(float(np.max(np.abs(eigvals))), np.finfo(float).tiny)
+    
+    if eigvals[0] < -tolerance * scale:
+        raise ValueError(f"Instabilité à q={q}")
+        
+    eigvals = np.where(
+        (eigvals < 0.0) & (eigvals >= -tolerance * scale),
+        0.0,
+        eigvals,
+    )
+    return np.sqrt(eigvals)
+
+def build_q_path(n_segment):
+    PI_A = np.pi / A
+    high_symmetry = [
+        ("Γ", np.array([0.0, 0.0, 0.0])),
+        ("X", np.array([PI_A, 0.0, 0.0])),
+        ("M", np.array([PI_A, PI_A, 0.0])),
+        ("R", np.array([PI_A, PI_A, PI_A])),
+        ("Γ", np.array([0.0, 0.0, 0.0])),
+    ]
+    q_points = []
+    tick_positions = []
+    tick_labels = []
+
+    for index, (label, q_point) in enumerate(high_symmetry):
+        if index > 0:
+            q_previous = high_symmetry[index - 1][1]
+            for step in range(n_segment):
+                t = step / n_segment
+                q_points.append((1.0 - t) * q_previous + t * q_point)
+
+        tick_positions.append(len(q_points))
+        tick_labels.append(label)
+        q_points.append(q_point)
+
+    q_path = np.asarray(q_points, dtype=float)
+    steps = np.linalg.norm(np.diff(q_path, axis=0), axis=1)
+    distance = np.concatenate(([0.0], np.cumsum(steps)))
+
+    return q_path, distance, np.asarray(tick_positions), tick_labels
+
+# --- Audits ---
 def test_matrix_properties():
     print("=== TEST 1 : PROPRIÉTÉS DE LA MATRICE ===")
     q_test = np.array([0.1, 0.2, 0.3]) * 1e9
@@ -111,12 +174,19 @@ def test_acoustic_sum_rule():
             
     print("[PASS] Les 3 vecteurs de translation rigide sont dans le noyau.")
     
-    # Vérification de la dimension du noyau
-    evals = np.linalg.eigvalsh(D0)
-    n_zero = np.sum(np.abs(evals) < 1e-12 * norm_D)
-    if n_zero != 3:
-        raise AssertionError(f"Le noyau n'est pas de dimension 3 (obtenu {n_zero}).")
-    print("[PASS] Le noyau est de dimension 3.")
+    eigenvalues = np.linalg.eigvalsh(D0)
+    scale = max(float(np.max(np.abs(eigenvalues))), np.finfo(float).tiny)
+    tolerance = 1.0e-12 * scale
+
+    acoustic = eigenvalues[:3]
+    optic = eigenvalues[3:]
+
+    assert np.all(np.abs(acoustic) < tolerance), f"Modes acoustiques non nuls à Gamma : {acoustic}"
+    assert np.all(optic > tolerance), f"Modes optiques non strictement positifs à Gamma : {optic}"
+
+    print(f"[PASS] Trois modes acoustiques à Gamma : {np.array2string(acoustic, precision=3)}")
+    print(f"[PASS] Trois modes optiques positifs : {np.array2string(optic, precision=3)}")
+    print(f"[INFO] Gap optique / norme D : {optic[0] / norm_D:.6e}")
 
 def test_eigenvalue_stability():
     print("\n=== TEST 3 : STABILITÉ SUR QUELQUES POINTS ===")
@@ -140,7 +210,7 @@ def test_eigenvalue_stability():
         print(f"q={q} : eigenvalue min = {evals[0]:.4e} (stable)")
         
     print("[PASS] Aucune instabilité détectée sur les points testés.")
-    print("(Note : la stabilité globale sur toute la zone de Brillouin est testée par V74).")
+    print("(Note : la stabilité globale sur toute la zone est testée par V74).")
 
 if __name__ == "__main__":
     test_matrix_properties()

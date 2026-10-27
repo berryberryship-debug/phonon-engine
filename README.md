@@ -22,9 +22,9 @@ Ce projet est un moteur de simulation en Python qui calcule la relation de dispe
 
 Les audits menés sur le moteur `v61` ont établi les points suivants :
 
-1. **Règle de somme acoustique** : La vérification directe de l'action de la matrice dynamique sur les trois vecteurs de translation rigide à \(\Gamma\) donne un résidu relatif de l'ordre de \(10^{-17}\), inférieur à la précision machine. L'invariance par translation est respectée par construction numérique.
+1. **Règle de somme acoustique** : La vérification directe de l'action de la matrice dynamique sur les trois vecteurs de translation rigide à \(\Gamma\) donne un résidu relatif de l'ordre de \(10^{-17}\), compatible avec la précision machine (double précision). L'invariance par translation est respectée par construction numérique.
 2. **Stabilité sur le trajet \(\Gamma \to X\)** : Aucune instabilité n'est détectée. L'analyse utilise une tolérance relative à l'échelle spectrale de la matrice pour distinguer les erreurs d'arrondi d'une véritable instabilité.
-3. **Égalité des vitesses acoustiques** : L'analyse numérique du modèle à 8 premiers voisins avec des ressorts centraux révèle une égalité des vitesses longitudinales et transverses (\(v_{LA} = v_{TA} \approx 2379.6\) m/s). Ce résultat, cohérent avec la structure de la matrice dynamique implémentée, n'est pas un théorème universel pour tous les cristaux, mais une propriété spécifique de ce modèle phénoménologique simplifié.
+3. **Égalité des vitesses acoustiques** : L'analyse numérique du modèle à 8 premiers voisins avec des ressorts centraux révèle une égalité des vitesses longitudinales et transverses (\(v_{LA} = v_{TA} \approx 2379.6\) m/s). Ce résultat est un constat numérique issu de ce modèle spécifique. Il reste à démontrer analytiquement si cette égalité est une conséquence stricte de la géométrie à 8 voisins ou du jeu de paramètres choisi.
 
 ## 🛠️ Installation & Lancement
 

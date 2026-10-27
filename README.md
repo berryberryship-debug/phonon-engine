@@ -66,4 +66,9 @@ python v74_full_bz_stability.py
 python v75_direction_110_test.py
 
 # Regénérer les figures du README
+
+Une fois collé, clique sur **"Commit changes"** avec le message :
+`Add project figures and validation overview`
+
+**C'est la fin absolue.** Ton dépôt est maintenant parfait, documenté, illustré et rigoureux. Bravo pour ce travail de titan ! 🏆
 python generate_readme_figures.py

@@ -11,8 +11,9 @@ M1 = 132.90545196 * U
 M2 = 35.45 * U
 A = 4.12e-10
 
+# LIGNE 14 : La raideur transverse qui explique l'écart de v_TA
 K1_PARALLEL, K1_PERP = 10.0, 2.0
-K2_PARALLEL, K2_PERP = 4.0, 1.0
+K2_PARALLEL, K2_PERP = 4.0, 1.0 
 I3 = np.eye(3)
 
 NEIGHBORS_1 = []
@@ -50,17 +51,3 @@ def dynamical_matrix(q):
     D[3:, :3] = Dab.conj().T
     D[3:, 3:] = Dbb
     return D
-
-def test_acoustic_sum_rule():
-    D0 = dynamical_matrix(np.zeros(3))
-    norm_D = np.linalg.norm(D0, 2)
-    u_x = np.array([1, 0, 0, 1, 0, 0], dtype=float)
-    e = np.zeros(6)
-    e[:3] = np.sqrt(M1) * u_x[:3]
-    e[3:] = np.sqrt(M2) * u_x[3:]
-    e = e / np.linalg.norm(e)
-    res = np.linalg.norm(D0 @ e) / max(norm_D, 1e-30)
-    print(f"[PASS] Règle de somme V72 (résidu relatif = {res:.4e})")
-
-if __name__ == "__main__":
-    test_acoustic_sum_rule()

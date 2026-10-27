@@ -1,90 +1,148 @@
 #!/usr/bin/env python3
 """
-V73 — Validation rigoureuse des vitesses acoustiques du modèle V72.
+V73 — Vitesses acoustiques de V72 le long de Γ → X.
 """
 
 import numpy as np
 import v72_second_neighbors as engine
 
+
+def rigid_translation(direction: np.ndarray, m1: float, m2: float) -> np.ndarray:
+    vector = np.zeros(6, dtype=float)
+    vector[:3] = direction * np.sqrt(m1)
+    vector[3:] = direction * np.sqrt(m2)
+    return vector / np.linalg.norm(vector)
+
+
+def acoustic_modes_along_x(q_value: float):
+    q = np.array([q_value, 0.0, 0.0])
+    D = engine.dynamical_matrix(q)
+
+    eigenvalues, eigenvectors = np.linalg.eigh(D)
+    scale = max(float(np.max(np.abs(eigenvalues))), np.finfo(float).tiny)
+
+    # Tolérance relative à l'échelle globale de la matrice (évite le faux positif à Gamma)
+    stability_tolerance = 1.0e-10 * scale
+
+    if eigenvalues[0] < -stability_tolerance:
+        raise ValueError(
+            f"Instabilité détectée à q={q}: "
+            f"lambda_min={eigenvalues[0]:.6e}, "
+            f"tolérance={stability_tolerance:.6e}"
+        )
+
+    frequencies = np.sqrt(np.clip(eigenvalues, 0.0, None))
+    acoustic_indices = np.argsort(eigenvalues)[:3]
+
+    q_hat = np.array([1.0, 0.0, 0.0])
+    longitudinal_fractions = []
+
+    for index in acoustic_indices:
+        vector = eigenvectors[:, index]
+
+        # Dé-massification pour obtenir les vrais déplacements
+        displacement = np.empty(6, dtype=float)
+        displacement[:3] = vector[:3] / np.sqrt(engine.M1)
+        displacement[3:] = vector[3:] / np.sqrt(engine.M2)
+
+        center_of_mass = (
+            engine.M1 * displacement[:3] + engine.M2 * displacement[3:]
+        ) / (engine.M1 + engine.M2)
+
+        longitudinal_fraction = (
+            abs(np.vdot(q_hat, center_of_mass)) ** 2
+            / max(np.vdot(center_of_mass, center_of_mass).real, 1.0e-30)
+        )
+        longitudinal_fractions.append(longitudinal_fraction)
+
+    # Le mode LA est celui qui a la plus grande fraction longitudinale
+    la_idx_in_aco = int(np.argmax(longitudinal_fractions))
+    la_index = acoustic_indices[la_idx_in_aco]
+    ta_indices = [index for index in acoustic_indices if index != la_index]
+
+    # Vérification que le mode identifié est bien longitudinal (fraction > 0.9)
+    if longitudinal_fractions[la_idx_in_aco] < 0.90:
+        raise ValueError(
+            f"Le mode identifié comme LA n'est pas assez longitudinal "
+            f"(fraction={longitudinal_fractions[la_idx_in_aco]:.2f}) à q={q_value}"
+        )
+
+    return {
+        "q": q_value,
+        "frequency_la": frequencies[la_index],
+        "frequency_ta_degenerate": float(np.mean(frequencies[ta_indices])),
+    }
+
+
+def slope_through_origin(q: np.ndarray, omega: np.ndarray):
+    q = np.asarray(q, dtype=float)
+    omega = np.asarray(omega, dtype=float)
+
+    slope = float(np.sum(q * omega) / np.sum(q * q))
+    residuals = omega - slope * q
+
+    n = len(q)
+    degrees_of_freedom = max(n - 1, 1)
+    residual_variance = float(np.sum(residuals**2) / degrees_of_freedom)
+    slope_error = float(np.sqrt(residual_variance / np.sum(q * q)))
+
+    relative_residual = float(
+        np.max(np.abs(residuals) / np.maximum(np.abs(omega), np.finfo(float).tiny))
+    )
+
+    return slope, slope_error, relative_residual
+
+
 def compute_velocities():
-    print("=== V73 : VITESSES ACOUSTIQUES (V72 - SECONDS VOISINS) ===")
-    
-    # 20 points pour une bonne statistique de régression
-    q_vals = np.linspace(1e6, 1e8, 20)
-    w_ta1_list, w_ta2_list, w_la_list = [], [], []
+    print("=== V73 : VITESSES ACOUSTIQUES DE V72 LE LONG DE Γ–X ===")
 
-    m1, m2 = engine.M1, engine.M2
+    q_max_values = np.array([1.0e7, 2.5e7, 5.0e7, 1.0e8])
+    q_reference = np.linspace(1.0e6, 1.0e8, 40)
 
-    for q_val in q_vals:
-        q = np.array([q_val, 0.0, 0.0])
-        D = engine.dynamical_matrix(q)
-        
-        # Vérification de l'herméticité
-        if not np.allclose(D, D.conj().T):
-            raise AssertionError("La matrice D(q) n'est pas hermitienne.")
+    la_frequencies = []
+    ta_frequencies = []
 
-        w2, V = np.linalg.eigh(D)
-        
-        # Vérifications de sécurité
-        assert np.all(np.isfinite(w2)), "Valeurs propres non finies."
-        scale = np.max(np.abs(w2))
-        assert scale > 0, "Spectre nul."
-        assert w2[0] > -1e-9 * scale, "Instabilité détectée."
-        
-        w = np.sqrt(np.clip(w2, 0, None))
-        
-        # --- Identification robuste des modes ---
-        # On construit le vecteur de translation rigide selon x (massivement pondéré)
-        # pour identifier le mode longitudinal acoustique (LA).
-        v_rigid_x = np.zeros(6)
-        v_rigid_x[:3] = np.array([1, 0, 0]) * np.sqrt(m1)
-        v_rigid_x[3:] = np.array([1, 0, 0]) * np.sqrt(m2)
-        v_rigid_x /= np.linalg.norm(v_rigid_x)
-        
-        # On cherche les 3 modes acoustiques (fréquences les plus basses)
-        idx_aco = np.argsort(w)[:3]
-        
-        # Calcul du recouvrement avec la translation rigide x
-        overlaps = [np.abs(np.vdot(v_rigid_x, V[:, i]))**2 for i in idx_aco]
-        
-        # Le mode avec le plus grand recouvrement est LA
-        i_la = idx_aco[np.argmax(overlaps)]
-        i_ta = [i for i in idx_aco if i != i_la]
-        
-        w_la_list.append(w[i_la])
-        w_ta1_list.append(w[i_ta[0]])
-        w_ta2_list.append(w[i_ta[1]])
+    for q_value in q_reference:
+        result = acoustic_modes_along_x(q_value)
+        la_frequencies.append(result["frequency_la"])
+        ta_frequencies.append(result["frequency_ta_degenerate"])
 
-    # Fonction de régression avec erreur standard (SEM)
-    # Note : Il s'agit d'une erreur de régression, pas d'une incertitude expérimentale.
-    def fit_and_err(q, w):
-        q = np.array(q)
-        w = np.array(w)
-        v = np.sum(q*w) / np.sum(q*q) # Régression forcée à l'origine
-        n = len(q)
-        sse = np.sum((w - v*q)**2)
-        var_v = sse / (n - 1) / np.sum(q**2)
-        return v, np.sqrt(var_v)
+    la_frequencies = np.asarray(la_frequencies)
+    ta_frequencies = np.asarray(ta_frequencies)
 
-    v_ta1, err_ta1 = fit_and_err(q_vals, w_ta1_list)
-    v_ta2, err_ta2 = fit_and_err(q_vals, w_ta2_list)
-    v_la, err_la = fit_and_err(q_vals, w_la_list)
+    print("\n--- Pente globale sur [1e6, 1e8] m^-1 ---")
 
-    # Vérification de la linéarité (en divisant par q pour chaque point)
-    wl_ta1 = np.array(w_ta1_list) / q_vals
-    wl_la = np.array(w_la_list) / q_vals
-    
-    lin_ta = (np.max(wl_ta1) / np.min(wl_ta1)) - 1
-    lin_la = (np.max(wl_la) / np.min(wl_la)) - 1
+    v_la, v_la_error, la_residual = slope_through_origin(q_reference, la_frequencies)
+    v_ta, v_ta_error, ta_residual = slope_through_origin(q_reference, ta_frequencies)
 
-    print(f"v_TA1 = {v_ta1:.2f} ± {err_ta1:.2f} m/s")
-    print(f"v_TA2 = {v_ta2:.2f} ± {err_ta2:.2f} m/s")
-    print(f"v_LA  = {v_la:.2f} ± {err_la:.2f} m/s")
-    print(f"Linéarité TA (w/q) = {lin_ta:.2e}")
-    print(f"Linéarité LA (w/q) = {lin_la:.2e}")
-    
-    ecart = abs(v_la - v_ta1) / max(v_ta1, 1e-10)
-    print(f"Écart relatif LA/TA = {ecart:.1%}")
+    print(f"v_LA = {v_la:.3f} ± {v_la_error:.3f} m/s")
+    print(f"v_TA = {v_ta:.3f} ± {v_ta_error:.3f} m/s")
+    print(f"Résidu relatif maximal LA : {la_residual:.3e}")
+    print(f"Résidu relatif maximal TA : {ta_residual:.3e}")
+
+    print("\n--- Convergence de la pente quand q_max diminue ---")
+    print("q_max (m^-1) | v_LA (m/s) | v_TA (m/s) | résidu LA | résidu TA")
+
+    for q_max in q_max_values:
+        mask = q_reference <= q_max
+
+        v_la_local, _, la_residual_local = slope_through_origin(
+            q_reference[mask], la_frequencies[mask]
+        )
+        v_ta_local, _, ta_residual_local = slope_through_origin(
+            q_reference[mask], ta_frequencies[mask]
+        )
+
+        print(
+            f"{q_max:12.3e} | "
+            f"{v_la_local:10.3f} | "
+            f"{v_ta_local:10.3f} | "
+            f"{la_residual_local:9.3e} | "
+            f"{ta_residual_local:9.3e}"
+        )
+
+    anisotropy = abs(v_la - v_ta) / v_ta
+    print(f"\nAnisotropie relative LA/TA : {anisotropy:.3%}")
 
 if __name__ == "__main__":
     compute_velocities()

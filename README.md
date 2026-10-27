@@ -2,6 +2,8 @@
 
 Ce projet est un moteur de simulation en Python qui calcule la relation de dispersion des phonons. Il a débuté avec une chaîne diatomique 1D (modèle de ressorts) et a évolué vers des structures cristallines 3D de type CsCl (chlorure de césium).
 
+![Architecture du projet](figures/01_architecture.png)
+
 ## 🚀 Fonctionnalités
 
 - **Moteurs physiques** : matrice dynamique pour une chaîne 1D (`v57`) et pour des réseaux cubiques 3D 6x6 (`v61_phonon_3d.py` et `v72_second_neighbors.py`).
@@ -15,36 +17,37 @@ Ce projet est un moteur de simulation en Python qui calcule la relation de dispe
 - `v72_second_neighbors.py` : moteur 3D enrichi des seconds voisins (Cs-Cs et Cl-Cl).
 - `v73_rigorous_validation.py` : vitesses acoustiques (V72) par régression multi-q.
 - `v74_full_bz_stability.py` : audit de stabilité sur une grille 3D de 3375 points (V72).
-- `v75_direction_110_test.py` : test d'hypothèse sur l'anisotropie de V61 le long de [110] (prédictions théoriques à vérifier : rapports 3/7 : 1 : 11/7).
+- `v75_direction_110_test.py` : test d'hypothèse sur l'anisotropie de V61 le long de [110] (prédictions théoriques à vérifier).
 - `v70_phonon_acoustic_validation.py` : diagnostic acoustique du modèle V61.
 - `audit_v61_rigorous.py` : audit de l'invariance par translation (V61).
 - `v57_production_501.py` : moteur 1D historique.
 
-Autres scripts présents dans le dépôt, non décrits ici : `v58_regression_test.py`, `v60_validate_artifacts.py`, `v61_cristal_3d.py`, `run_all.py`.
+Autres scripts présents dans le dépôt, non décrits ici : `v58_regression_test.py`, `v60_validate_artifacts.py`, `v61_cristal_3d.py`, `run_all.py`, `generate_readme_figures.py`.
 
-*(Les scripts V62 à V69 sont à la racine du dépôt à titre d'archives ; ils documentent l'évolution des algorithmes de suivi de branches).*
+## 🛡️ Carte des validations
+
+![Carte des validations](figures/02_validation_map.png)
 
 ## 📊 Résultats physiques et limites
 
+![Résultats et limites](figures/03_results_and_limits.png)
+
+**Résumé des observations :**
+
 1. **Modèle à premiers voisins (V61)**
-   - **Dégénérescence exacte des vitesses acoustiques le long de [100]** : $v_{LA} = v_{TA} \approx 2380.5$ m/s. Elle vaut pour toutes les valeurs de $K_\parallel$ et $K_\perp$.
-   - **Anisotropie** : le cristal n'est pas isotrope. Le cisaillement $C'$ est proportionnel à $K_\perp$ ; le rapport de Zener vaut $(K_\parallel + 2K_\perp)/(3K_\perp) = 7/3$.
-     - [110] : trois branches distinctes (≈ 1558, 2381, 2984 m/s).
-     - [111] : TA doublement dégénérée (≈ 1873 m/s), LA distincte (≈ 3160 m/s).
-   - **Stabilité** : $C' > 0$, le cristal n'est pas marginalement instable.
+   - **Dégénérescence exacte des vitesses acoustiques le long de [100]** : $v_{LA} = v_{TA} \approx 2380.5$ m/s.
+   - **Anisotropie** : le cristal n'est pas isotrope. Le cisaillement $C'$ est proportionnel à $K_\perp$ ; le rapport de Zener vaut 7/3.
+   - **Stabilité** : $C' > 0$.
 
 2. **Modèle à seconds voisins (V72-V74)**
-   - $K_{2\parallel} = 4.0$ N/m augmente $C_{11}$ ; $K_{2\perp} = 1.0$ N/m augmente $C_{44}$ et diminue $C_{12}$ d'autant ($\delta C_{12} = -\delta C_{44}$). La dégénérescence LA/TA le long de [100] est levée.
-   - Vitesses le long de [100] :
-     - TA : $2623.2 \pm 0.2$ m/s
-     - LA : $3244.1 \pm 0.2$ m/s
-     *Note : L'incertitude de $\pm 0.2$ m/s représente l'erreur standard de la régression sur les points de simulation, et non une incertitude expérimentale.*
-   - L'onde longitudinale est ~23,7 % plus rapide que la transverse le long de [100]. Le rapport de Zener descend à environ 1,26.
+   - Vitesses le long de [100] : TA = $2623.2 \pm 0.2$ m/s, LA = $3244.1 \pm 0.2$ m/s.
+   - *Note : L'incertitude de $\pm 0.2$ m/s représente l'erreur standard de la régression sur les points de simulation, et non une incertitude expérimentale.*
+   - L'onde longitudinale est ~23,7 % plus rapide que la transverse. Le rapport de Zener descend à environ 1,26.
 
 **Limites physiques**
-- **Ionicité** : le CsCl étant ionique, un modèle de ressorts ne peut pas capturer la séparation LO-TO (interaction de Coulomb à longue portée). Les vitesses sont paramétriques, pas des prédictions expérimentales.
-- **Constantes de force** : les constantes des seconds voisins sont illustratives ; $K_{2\perp}$ produit un $C_{12}$ négatif.
-- **Stabilité V72** : aucune instabilité significative détectée sur la grille de 3375 points de la zone de Brillouin. Cela n'exclut pas la présence de modes instables dans le continuum non échantillonné.
+- **Ionicité** : absence d'interaction de Coulomb à longue portée (pas de séparation LO-TO).
+- **Constantes de force** : les constantes des seconds voisins sont illustratives ($K_{2\perp}$ produit un $C_{12}$ négatif).
+- **Stabilité V72** : aucune instabilité significative détectée sur la grille de 3375 points, mais cela n'exclut pas le continuum non échantillonné.
 
 ## 🛠️ Installation & lancement
 
@@ -61,3 +64,6 @@ python v74_full_bz_stability.py
 
 # Test d'hypothèse d'anisotropie de V61 (V75)
 python v75_direction_110_test.py
+
+# Regénérer les figures du README
+python generate_readme_figures.py

@@ -92,27 +92,27 @@ Prérequis : Python 3.9 ou plus récent, NumPy, SciPy et Matplotlib.
 pip install -r requirements.txt
 ```
 
-### Audits structurels et acoustiques
+### 1. Audits structurels et acoustiques — V61
 
 ```bash
 python audit_v61_rigorous.py
 python v70_phonon_acoustic_validation.py
 ```
 
-### Vitesses acoustiques et stabilité — V72
+### 2. Vitesses acoustiques et stabilité — V72
 
 ```bash
 python v73_rigorous_validation.py
 python v74_full_bz_stability.py
 ```
 
-### Anisotropie — V61
+### 3. Test d’anisotropie — V61
 
 ```bash
 python v75_direction_110_test.py
 ```
 
-### Régénération des figures
+### 4. Régénération des figures
 
 ```bash
 python generate_readme_figures.py
@@ -123,26 +123,3 @@ python generate_readme_figures.py
 Ce dépôt valide la cohérence interne et la stabilité numérique de modèles phononiques simplifiés. Il ne prétend pas reproduire quantitativement les dispersions expérimentales du CsCl sans données expérimentales numérisées, leurs unités, leurs directions cristallographiques et leurs incertitudes.
 
 Les résultats chiffrés du README doivent être considérés comme validés uniquement s’ils sont régénérés par les scripts correspondants et conservés dans des artifacts vérifiables.
-🛠️ Installation & lancement
-
-Prérequis : Python 3.9+, NumPy, SciPy et Matplotlib.
-
-pip install -r requirements.txt
-
-1. Audits structurels et acoustiques — V61
-
-python audit_v61_rigorous.py
-python v70_phonon_acoustic_validation.py
-
-2. Vitesses acoustiques et stabilité — V72
-
-python v73_rigorous_validation.py
-python v74_full_bz_stability.py
-
-3. Test d’anisotropie — V61
-
-python v75_direction_110_test.py
-
-4. Régénération des figures
-
-python generate_readme_figures.py

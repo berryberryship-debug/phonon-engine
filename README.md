@@ -39,3 +39,14 @@ python v70_phonon_acoustic_validation.py
 
 # Lancer l'audit de la règle de somme (V71)
 python audit_v61_rigorous.py
+## 🧬 Modèle enrichi avec seconds voisins (V72-V74)
+
+Pour dépasser la limite d'isotropie du modèle à 8 premiers voisins, les interactions de seconds voisins (Cs-Cs et Cl-Cl) ont été ajoutées. 
+
+- **Stabilité** : Le modèle est stable sur toute la zone de Brillouin 3D (testé sur 3375 points).
+- **Vitesses acoustiques** : La symétrie est brisée. La régression sur plusieurs vecteurs d'onde donne :
+  - Vitesse Transverse (TA) : 2623.24 m/s
+  - Vitesse Longitudinale (LA) : 3244.14 m/s
+  - L'onde longitudinale est ~23.7% plus rapide que l'onde transverse.
+
+*Note : Les constantes de force pour les seconds voisins (K2_parallel=4.0 N/m, K2_perp=1.0 N/m) sont des paramètres phénoménologiques. Elles illustrent la levée de dégénérescence mais ne constituent pas un ajustement quantitatif pour le CsCl réel.*

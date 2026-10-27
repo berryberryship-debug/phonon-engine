@@ -9,14 +9,24 @@ import v72_second_neighbors as engine
 def audit_3d_grid(n_points=15):
     print("=== V74 : AUDIT DE STABILITÉ 3D COMPLET (SECONDS VOISINS) ===")
     
-    # --- Test explicite des 3 modes nuls à Gamma ---
+    # --- Test explicite des 3 modes nuls à Gamma et du gap optique ---
     D_gamma = engine.dynamical_matrix(np.zeros(3))
     evals_gamma = np.linalg.eigvalsh(D_gamma)
-    scale_gamma = max(np.max(np.abs(evals_gamma)), 1.0)
-    n_zero = np.sum(np.abs(evals_gamma) < 1e-12 * scale_gamma)
-    if n_zero != 3:
-        raise AssertionError(f"Attendu 3 modes nuls à Gamma, obtenu {n_zero}.")
-    print("[PASS] 3 modes acoustiques nuls à Gamma.")
+    norm_D = np.linalg.norm(D_gamma, 2)
+    
+    if norm_D <= 0:
+        raise AssertionError("La matrice D(0) est nulle.")
+        
+    tol = 1e-12 * norm_D
+    acoustic = evals_gamma[:3]
+    optic = evals_gamma[3:]
+    
+    if not np.all(np.abs(acoustic) < tol):
+        raise AssertionError(f"Modes acoustiques non nuls à Gamma : {acoustic}")
+    if not np.all(optic > tol):
+        raise AssertionError(f"Modes optiques non strictement positifs à Gamma : {optic}")
+        
+    print("[PASS] 3 modes acoustiques nuls à Gamma et gap optique strictement positif.")
 
     # --- Grille sur la zone de Brillouin du réseau de Bravais sous-jacent ---
     PI_A = np.pi / engine.A
@@ -26,6 +36,7 @@ def audit_3d_grid(n_points=15):
     min_eval_rel = np.inf
     min_q = None
     instabilites = 0
+    SEUIL_RELATIF = -1e-5
     
     for qx in q_vals:
         for qy in q_vals:
@@ -33,11 +44,11 @@ def audit_3d_grid(n_points=15):
                 q = np.array([qx, qy, qz])
                 D = engine.dynamical_matrix(q)
                 
-                # Vérification de l'herméticité avec tolérance relative
-                norm_D = np.linalg.norm(D, 2)
-                if norm_D > 0:
+                # Vérification de l'herméticité
+                norm_D_q = np.linalg.norm(D, 2)
+                if norm_D_q > 0:
                     diff = np.max(np.abs(D - D.conj().T))
-                    if diff > 1e-12 * norm_D:
+                    if diff > 1e-12 * norm_D_q:
                         raise AssertionError(f"Matrice non hermitienne à q={q}")
                 
                 evals = np.linalg.eigvalsh(D)
@@ -51,8 +62,7 @@ def audit_3d_grid(n_points=15):
                     min_eval_rel = current_min_rel
                     min_q = q.copy()
                     
-                # Seuil de diagnostic (choix numérique, pas une frontière physique universelle)
-                if current_min_rel < -1e-5:
+                if current_min_rel < SEUIL_RELATIF:
                     instabilites += 1
                     
     print(f"Grille testée : {n_points}^3 = {n_points**3} points")
@@ -61,11 +71,11 @@ def audit_3d_grid(n_points=15):
     print(f"Au point q = [{min_q[0]:.4e}, {min_q[1]:.4e}, {min_q[2]:.4e}] m^-1")
     
     if instabilites > 0:
-        print(f"[FAIL] {instabilites} instabilités physiques détectées !")
+        print(f"[FAIL] {instabilites} instabilités significatives détectées (seuil relatif < {SEUIL_RELATIF}).")
         return False
     else:
-        print("[PASS] Aucune instabilité physique détectée sur la grille.")
-        print("(Note : Ceci est un test numérique sur une grille, et ne constitue pas une preuve analytique sur tout le continuum).")
+        print(f"[PASS] Aucune instabilité significative détectée sur la grille (seuil relatif < {SEUIL_RELATIF}).")
+        print("(Note : Ceci est un test numérique sur une grille finie, et ne constitue pas une preuve analytique de stabilité sur tout le continuum).")
         return True
 
 if __name__ == "__main__":

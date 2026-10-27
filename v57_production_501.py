@@ -34,26 +34,30 @@ def main():
         data.append([q, w_aco, w_opt])
     
     data = np.array(data)
-    
-    # Noms de fichiers attendus par V58 et V60
+    q = data[:, 0]
+    w_aco = data[:, 1]
+    w_opt = data[:, 2]
+
+    # Calcul des vitesses de groupe (nécessaire pour V58)
+    vg_aco = np.gradient(w_aco, q)
+    vg_opt = np.gradient(w_opt, q)
+
+    # Noms de fichiers et colonnes attendus par V58 et V60
     csv_file = "phonon_dispersion_501.csv"
     png_file = "phonon_curves_501.png"
 
-    # Note : V58 calcule les vitesses de groupe à partir de ce CSV. 
-    # Pour éviter un crash, on ajoute des colonnes vides ou on laisse V58 les calculer.
-    # Ici, on génère le CSV avec les colonnes attendues (V58 recalculera les dérivées).
     with open(csv_file, mode='w', newline='') as f:
         writer = csv.writer(f)
-        # V60 attend ces en-têtes exacts
-        writer.writerow(["q_m^-1", "omega_acoustic_rad_s^-1", "omega_optical_rad_s^-1"])
-        writer.writerows(data)
+        writer.writerow(["q_m^-1", "omega_acoustic_rad_s^-1", "omega_optical_rad_s^-1", "vg_aco_ms", "vg_opt_ms"])
+        for i in range(len(q)):
+            writer.writerow([q[i], w_aco[i], w_opt[i], vg_aco[i], vg_opt[i]])
     
     print(f"[PASS] CSV exporté : {csv_file}")
 
     # Génération du graphique PNG
     plt.figure(figsize=(10, 6))
-    plt.plot(data[:, 0], data[:, 1], 'b-', label='Acoustique')
-    plt.plot(data[:, 0], data[:, 2], 'r-', label='Optique')
+    plt.plot(q, w_aco, 'b-', label='Acoustique')
+    plt.plot(q, w_opt, 'r-', label='Optique')
     plt.xlabel("Vecteur d'onde q (m^-1)")
     plt.ylabel("Fréquence omega (rad/s)")
     plt.title("Dispersion Phononique 1D")

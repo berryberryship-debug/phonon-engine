@@ -48,7 +48,7 @@ Le long de [100], la régression linéaire dans le régime acoustique (sur 20 po
 - $v_{TA} = 2623.2 \pm 0.2$ m/s ;
 - $v_{LA} = 3244.1 \pm 0.2$ m/s.
 
-Les incertitudes sont les erreurs standard de régression sur les points de simulation. Elles ne incluent ni la courbure systématique de $\omega(q)$, ni une incertitude expérimentale.
+Les incertitudes sont les erreurs standard de régression sur les points de simulation. Elles n'incluent ni la courbure systématique de $\omega(q)$, ni une incertitude expérimentale.
 
 L'onde longitudinale est environ 23,7 % plus rapide que l'onde transverse. Le rapport de Zener du modèle vaut environ 1,26.
 
@@ -65,3 +65,8 @@ Nécessite Python 3.9+, NumPy, SciPy et Matplotlib.
 
 ```bash
 pip install -r requirements.txt
+
+# Lancer les validations
+python v73_rigorous_validation.py
+python v74_full_bz_stability.py
+python v75_direction_110_test.py

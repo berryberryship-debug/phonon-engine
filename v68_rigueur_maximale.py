@@ -1,7 +1,6 @@
-```python
 #!/usr/bin/env python3
 """
-V68 — Suivi de branches par sous-espaces, alignement de Procruste et vitesses du son.
+V68 (Corrigé) — Suivi de branches, alignement de Procruste sécurisé et vitesses du son.
 """
 
 from __future__ import annotations
@@ -63,7 +62,11 @@ def subspace_overlap_matrix(prev_proj: list[np.ndarray], curr_proj: list[np.ndar
     return overlap
 
 def align_subspace_basis(prev_vectors: np.ndarray, curr_vectors: np.ndarray) -> np.ndarray:
-    """Algorithme de Procruste pour aligner les phases dans un sous-espace dégénéré."""
+    """Algorithme de Procruste avec sécurité dimensionnelle."""
+    # Si les tailles de groupe diffèrent (erreur d'arrondi numérique), on ne peut pas aligner
+    if prev_vectors.shape[1] != curr_vectors.shape[1]:
+        return curr_vectors
+
     # Matrice de recouvrement
     M = prev_vectors.conj().T @ curr_vectors
     # SVD : M = U S V^dagger
@@ -72,40 +75,11 @@ def align_subspace_basis(prev_vectors: np.ndarray, curr_vectors: np.ndarray) -> 
     R = U @ Vh
     return curr_vectors @ R
 
-def polarization_fractions(q: np.ndarray, eigenvector: np.ndarray, masses: tuple[float, float]):
-    q_norm = np.linalg.norm(q)
-    if q_norm < 1.0e-12:
-        return {"acoustic": np.nan, "longitudinal_acoustic": np.nan, "longitudinal_optic": np.nan}
-    
-    q_hat = q / q_norm
-    m_a, m_b = masses
-    u_a, u_b = eigenvector[:3], eigenvector[3:]
-    
-    cm = (m_a * u_a + m_b * u_b) / (m_a + m_b)
-    rel = u_a - u_b
-    
-    norm_cm = np.vdot(cm, cm).real
-    norm_rel = np.vdot(rel, rel).real
-    total = norm_cm + norm_rel
-    
-    if total < 1.0e-30:
-        return {"acoustic": np.nan, "longitudinal_acoustic": np.nan, "longitudinal_optic": np.nan}
-        
-    frac_aco = norm_cm / total
-    lon_aco = abs(np.vdot(q_hat, cm))**2 / max(norm_cm, 1e-30)
-    lon_opt = abs(np.vdot(q_hat, rel))**2 / max(norm_rel, 1e-30)
-    
-    return {"acoustic": frac_aco, "longitudinal_acoustic": lon_aco, "longitudinal_optic": lon_opt}
-
 def extract_gamma_to_x(q_path, distance, tick_pos, tick_lab):
-    """Correction 1 : Utilisation des VRAIS indices numériques."""
     if "Γ" not in tick_lab or "X" not in tick_lab:
         raise ValueError("Le chemin doit contenir Γ et X.")
-    
-    # tick_pos contient les indices réels (0, 100, 200...)
     gamma_idx = int(tick_pos[tick_lab.index("Γ")])
     x_idx = int(tick_pos[tick_lab.index("X")])
-    
     return q_path[gamma_idx : x_idx + 1], distance[gamma_idx : x_idx + 1]
 
 def track_branches(cfg: Config):
@@ -139,9 +113,10 @@ def track_branches(cfg: Config):
         for p_idx, c_idx in zip(prev_idx, curr_idx):
             p_grp, c_grp = prev_groups[p_idx], groups_c[c_idx]
             
-            # Correction 2 : Alignement de Procruste
+            # Alignement de Procruste (sécurisé)
             aligned_vecs = align_subspace_basis(prev_vecs[:, p_grp], vecs_c[:, c_grp])
 
+            # On affecte les modes
             for local_i, mode_i in enumerate(p_grp):
                 if local_i < len(c_grp):
                     c_mode = c_grp[local_i]
@@ -153,8 +128,7 @@ def track_branches(cfg: Config):
 
     return q_segment, dist_segment, freq_thz, vecs_tracked
 
-def compute_sound_velocities(q_segment, omega_tracked, masses):
-    """Correction 3 : Calcul rigoureux de la pente à Gamma."""
+def compute_sound_velocities(q_segment, omega_tracked):
     # On prend le point 1 (premier non nul)
     q0, q1 = q_segment[0], q_segment[1]
     dq = np.linalg.norm(q1 - q0)
@@ -162,7 +136,9 @@ def compute_sound_velocities(q_segment, omega_tracked, masses):
     if dq < 1e-12:
         return np.zeros(3)
         
-    dw = omega_tracked[1, :3] - omega_tracked[0, :3]
+    # omega_tracked est en THz, on le convertit en rad/s pour la vitesse
+    omega_rads = omega_tracked * 2 * np.pi * 1e12
+    dw = omega_rads[1, :3] - omega_rads[0, :3]
     velocities = dw / dq
     
     print("\n=== VITESSES DU SON CALCULÉES (m/s) ===")
@@ -194,11 +170,7 @@ def main():
     print(f"\n[PASS] Figure : {cfg.output_image}")
 
     # Vitesses du son
-    # (On utilise les fréquences en rad/s pour le calcul de la vitesse)
-    # Attention : on n'a que les THz dans le retour, on doit recalculer en rad/s
-    # Pour l'exemple, on approxime :
-    velocities = compute_sound_velocities(q_seg, freq_thz * 2 * np.pi * 1e12, cfg.masses)
+    compute_sound_velocities(q_seg, freq_thz)
     
 if __name__ == "__main__":
     main()
-```

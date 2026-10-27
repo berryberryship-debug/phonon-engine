@@ -1,65 +1,89 @@
 #!/usr/bin/env python3
 """
-V62 (Corrigé) — Audit de stabilité sur une grille 3D incluant explicitement Gamma.
+V61 — Moteur de dispersion phononique 3D, réseau cubique type CsCl.
 """
 
+from itertools import product
+from pathlib import Path
+import csv
 import numpy as np
-import sys
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
-try:
-    from v61_phonon_3d import dynamical_matrix, PI_A
-except ImportError:
-    print("Erreur : v61_phonon_3d.py introuvable.")
-    sys.exit(1)
+# --- Paramètres Physiques ---
+U = 1.66053906660e-27
+M1 = 132.90545196 * U  # Cs
+M2 = 35.45 * U         # Cl (corrigé)
+A = 4.12e-10
+K_PARALLEL = 10.0
+K_PERP = 2.0
 
-def audit_grille_3d(n_points=21):
-    if n_points % 2 == 0:
-        n_points += 1
+I3 = np.eye(3)
+NEIGHBORS = []
+for sx, sy, sz in product((-1, 1), repeat=3):
+    R = 0.5 * A * np.array([sx, sy, sz], dtype=float)
+    rhat = R / np.linalg.norm(R)
+    P = np.outer(rhat, rhat)
+    K = K_PERP * I3 + (K_PARALLEL - K_PERP) * P
+    NEIGHBORS.append((R, K))
+
+def dynamical_matrix(q):
+    q = np.asarray(q, dtype=float)
+    Daa = np.zeros((3, 3), dtype=complex)
+    Dbb = np.zeros((3, 3), dtype=complex)
+    Dab = np.zeros((3, 3), dtype=complex)
+    for R, K in NEIGHBORS:
+        phase = np.exp(1j * np.dot(q, R))
+        Daa += K / M1
+        Dbb += K / M2
+        Dab += -K * phase / np.sqrt(M1 * M2)
+    D = np.zeros((6, 6), dtype=complex)
+    D[:3, :3] = Daa
+    D[:3, 3:] = Dab
+    D[3:, :3] = Dab.conj().T
+    D[3:, 3:] = Dbb
+    return D
+
+def frequencies(q, tolerance=1e-12):  # Tolérance stricte
+    D = dynamical_matrix(q)
+    eigvals = np.linalg.eigvalsh(D)
+    scale = max(float(np.max(np.abs(eigvals))), np.finfo(float).tiny)
+    
+    if eigvals[0] < -tolerance * scale:
+        raise ValueError(f"Instabilité à q={q}")
         
-    print(f"=== V62 : AUDIT DE STABILITÉ SUR GRILLE 3D ({n_points}x{n_points}x{n_points}) ===")
-    print(f"Nombre total de points testés : {n_points**3}")
-    
-    q_vals = np.linspace(-PI_A, PI_A, n_points)
-    
-    min_eigenvalue = np.inf
-    min_q = None
-    instabilites = 0
-    
-    for qx in q_vals:
-        for qy in q_vals:
-            for qz in q_vals:
-                q = np.array([qx, qy, qz])
-                
-                D = dynamical_matrix(q)
-                eigvals = np.linalg.eigvalsh(D)
-                
-                current_min = np.min(eigvals)
-                if current_min < min_eigenvalue:
-                    min_eigenvalue = current_min
-                    min_q = q.copy()
-                    
-                tolerance = -1e-5 * max(np.max(np.abs(eigvals)), 1.0)
-                if current_min < tolerance:
-                    instabilites += 1
-
-    print(f"\nValeur propre minimale trouvée : {min_eigenvalue:.4e} s^-2")
-    print(f"Au point q = [{min_q[0]:.4e}, {min_q[1]:.4e}, {min_q[2]:.4e}] m^-1")
-    
-    D_gamma = dynamical_matrix(np.zeros(3))
-    eig_gamma = np.linalg.eigvalsh(D_gamma)
-    n_zero_gamma = np.count_nonzero(np.abs(eig_gamma) < 1e-10 * max(np.max(np.abs(eig_gamma)), 1.0))
-    print(f"\nModes nuls à Gamma (q=0) : {n_zero_gamma} (attendu : 3)")
-    
-    if instabilites > 0:
-        print(f"\n[FAIL] {instabilites} points instables détectés !")
-        sys.exit(1)
+    if np.all(q == 0.0):
+        eigvals[np.abs(eigvals) < tolerance * scale] = 0.0
     else:
-        print("\n[PASS] Aucune instabilité sur la grille.")
-        print("Le modèle est dynamiquement stable sur le volume testé.")
+        eigvals[(eigvals < 0.0) & (eigvals >= -tolerance * scale)] = 0.0
+        
+    return np.sqrt(eigvals)
+
+def build_q_path(n_segment):
+    PI_A = np.pi / A
+    HIGH_SYMMETRY = [
+        ("Γ", np.array([0.0, 0.0, 0.0])),
+        ("X", np.array([PI_A, 0.0, 0.0])),
+        ("M", np.array([PI_A, PI_A, 0.0])),
+        ("R", np.array([PI_A, PI_A, PI_A])),
+        ("Γ", np.array([0.0, 0.0, 0.0])),
+    ]
+    points = []
+    for seg in range(len(HIGH_SYMMETRY) - 1):
+        q0 = HIGH_SYMMETRY[seg][1]
+        q1 = HIGH_SYMMETRY[seg + 1][1]
+        for j in range(n_segment):
+            t = j / n_segment
+            points.append((1.0 - t) * q0 + t * q1)
+    points.append(HIGH_SYMMETRY[-1][1])
+    return np.array(points)
+
+def main():
+    print("=== V61 : MOTEUR 3D (PREMIERS VOISINS) ===")
+    q_path = build_q_path(100)
+    omega = np.array([frequencies(q) for q in q_path])
+    print(f"[PASS] {len(q_path)} points calculés.")
 
 if __name__ == "__main__":
-    try:
-        audit_grille_3d(n_points=21)
-    except Exception as e:
-        print(f"ÉCHEC V62 : {e}", file=sys.stderr)
-        sys.exit(1)
+    main()

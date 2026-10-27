@@ -19,9 +19,12 @@ Ce projet est un moteur de simulation en Python qui calcule la relation de dispe
 - `v70_phonon_acoustic_validation.py` : Pipeline de diagnostic pour le modèle V61.
 - `audit_v61_rigorous.py` : Audit strict de l'invariance par translation (V61).
 - `v57_production_501.py` : Moteur 1D historique.
-- `v58_regression_test.py`, `v60_validate_artifacts.py`, `v61_cristal_3d.py`, `run_all.py` : Scripts de test et d'orchestration associés au moteur 1D et à la visualisation.
+- `v58_regression_test.py` : Tests de régression du moteur 1D.
+- `v60_validate_artifacts.py` : Validation des fichiers de sortie du moteur 1D.
+- `v61_cristal_3d.py` : Script de visualisation de la structure cristalline (ASE).
+- `run_all.py` : Orchestrateur pour le pipeline 1D historique.
 
-*(Les scripts V62 à V69 sont conservés à la racine du dépôt à titre d'archives, documentant l'évolution des algorithmes de suivi de branches).*
+*(Les scripts V62 à V69 sont conservés à la racine de ce dépôt à titre d'archives, documentant l'évolution des algorithmes de suivi de branches).*
 
 ## 📊 Résultats Physiques et Limites
 
@@ -52,10 +55,13 @@ Nécessite Python 3.9+, NumPy, SciPy et Matplotlib.
 # Installer les dépendances
 pip install -r requirements.txt
 
-# Lancer la validation du modèle enrichi (V73)
+# Lancer le pipeline 1D historique
+python run_all.py
+
+# Lancer la validation du modèle enrichi 3D (V73)
 python v73_rigorous_validation.py
 
-# Lancer l'audit de stabilité (V74)
+# Lancer l'audit de stabilité 3D (V74)
 python v74_full_bz_stability.py
 
 # Lancer le test d'anisotropie (V75)

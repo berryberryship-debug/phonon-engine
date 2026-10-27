@@ -1,63 +1,41 @@
-# Phonon Engine — 1D Diatomic Chain Dispersion
+# Phonon Engine — 1D & 3D Phonon Dispersion
 
-Ce projet est un moteur de simulation physique écrit en Python qui calcule la relation de dispersion et les vitesses de groupe des phonons dans une chaîne **diatomique** unidimensionnelle (deux atomes de masses différentes par maille élémentaire). 
-
-Il est né d'une exploration théorique sur les tachyons et les ordinateurs quantiques, et a évolué vers un outil de physique du solide rigoureusement testé.
+Ce projet est un moteur de simulation en Python qui calcule la relation de dispersion des phonons. Il a débuté avec une chaîne diatomique 1D (modèle de ressorts) et a évolué vers une structure cristalline 3D de type CsCl (Chlorure de Césium).
 
 ## 🚀 Fonctionnalités
 
-- **Modèle physique** : Chaîne diatomique 1D avec masses m1, m2 et ressort de raideur k.
-- **Calculs** : Formules analytiques rationalisées pour éviter l'annulation catastrophique près de q=0.
-- **Exports** : Génération des données en `.csv` et des graphiques en `.png`.
-- **Pipeline de validation** : Intègre la génération, la validation des artefacts et les tests de régression.
+- **Moteurs physiques** : Calcul de la matrice dynamique pour une chaîne 1D (`v57`) et un réseau cubique 3D 6x6 (`v61_phonon_3d.py`).
+- **Suivi de branches** : Algorithme d'affectation (Kuhn-Munkres) avec gestion des dégénérescences et alignement de phase (Procruste). Ces algorithmes permettent de suivre les modes de façon continue, sans garantir à eux seuls leur exactitude physique.
+- **Validation** : Pipeline de diagnostic (V70) et audits formels (V71) vérifiant la règle de somme acoustique.
+- **Masses atomiques** : Prise en compte des masses réelles pour le CsCl (\(M_{Cs} = 132.90\), \(M_{Cl} = 35.45\) uma).
 
-## 📊 Paramètres Physiques
+## 📂 Scripts Principaux
 
-- Masses : m1 = 2.0 uma, m2 = 4.0 uma
-- Constante de raideur : k = 10.0 N/m
-- Paramètre de maille : a = 5.0 × 10⁻¹⁰ m
-- Nombre de points : 501 (inclut exactement q=0)
+- `v61_phonon_3d.py` : Le moteur de calcul de la matrice dynamique 3D pour le CsCl.
+- `v70_phonon_acoustic_validation.py` : Pipeline de diagnostic extrayant les branches acoustiques et calculant les vitesses du son par régression.
+- `audit_v61_rigorous.py` : Audit strict de l'invariance par translation.
+- `v57_production_501.py` : Moteur 1D historique.
 
-## 🔬 Nature exacte du modèle (Diatomique)
+*(Les scripts V62 à V69 sont conservés dans le dépôt à titre d'archives, documentant l'évolution des algorithmes de suivi de branches).*
 
-Contrairement à une chaîne monoatomique qui ne possède qu'une seule branche de dispersion lisse, ce modèle simule une chaîne **diatomique** (deux atomes par maille). Cela se traduit par deux branches distinctes :
-1. La branche **acoustique** (où les deux atomes vibrent en phase).
-2. La branche **optique** (où les deux atomes vibrent en opposition de phase).
+## 📊 Résultats Physiques et Limites
 
-C'est cette nature diatomique qui explique la "cuspide" (le saut brusque) de la vitesse de groupe de la branche acoustique à q=0. La fréquence se comporte comme ω ∝ |q|, dont la dérivée (la vitesse) est discontinue en 0.
+Les audits menés sur le moteur `v61` ont établi les points suivants :
 
-## 🛠️ Installation & Reproduction
+1. **Règle de somme acoustique** : La vérification directe de l'action de la matrice dynamique sur les trois vecteurs de translation rigide à \(\Gamma\) donne un résidu relatif de l'ordre de \(10^{-17}\), inférieur à la précision machine. L'invariance par translation est respectée par construction numérique.
+2. **Stabilité sur le trajet \(\Gamma \to X\)** : Aucune instabilité n'est détectée. L'analyse utilise une tolérance relative à l'échelle spectrale de la matrice pour distinguer les erreurs d'arrondi d'une véritable instabilité.
+3. **Égalité des vitesses acoustiques** : L'analyse numérique du modèle à 8 premiers voisins avec des ressorts centraux révèle une égalité des vitesses longitudinales et transverses (\(v_{LA} = v_{TA} \approx 2379.6\) m/s). Ce résultat, cohérent avec la structure de la matrice dynamique implémentée, n'est pas un théorème universel pour tous les cristaux, mais une propriété spécifique de ce modèle phénoménologique simplifié.
 
-Nécessite Python 3.9+ (testé avec NumPy et Matplotlib récents).
+## 🛠️ Installation & Lancement
 
-Pour cloner et lancer le pipeline complet (Génération V57 + Validation des artefacts V60 + Tests de régression V58) :
+Nécessite Python 3.9+, NumPy, SciPy et Matplotlib.
 
-    git clone https://github.com/berryberryship-debug/phonon-engine.git
-    cd phonon-engine
-    python run_all.py
+```bash
+# Installer les dépendances
+pip install -r requirements.txt
 
-Pour reproduire spécifiquement les tests de validation (V58) et de robustesse (V59) :
+# Lancer le diagnostic des vitesses acoustiques (V70)
+python v70_phonon_acoustic_validation.py
 
-    # Lancer uniquement les 14 tests de régression physique (V58)
-    python v58_regression_test.py
-
-    # Lancer le test de robustesse du pipeline (V59)
-    python v59_test_pipeline.py
-
-## 📈 Résultats
-
-- `phonon_dispersion_501.csv` : Tableau de 501 lignes avec q, ω_aco, ω_opt, v_g_aco, v_g_opt.
-- `phonon_curves_501.png` : Graphique des branches de dispersion et des vitesses de groupe.
-
-## 📐 Définition de l'erreur relative (Vitesses de groupe)
-
-Les 14 tests de régression comparent les vitesses de groupe analytiques exactes (v_g = dω/dq) aux vitesses calculées par différences finies sur la grille discrète. L'erreur relative maximale est calculée comme suit :
-Erreur = max( |v_g_numérique - v_g_analytique| ) / max( |v_g_analytique| )
-Cette normalisation par l'échelle globale (le maximum) évite les divisions par zéro près de q=0.
-
-## ⚠️ Portée et limites
-
-Les tests vérifient la cohérence numérique interne de l'implémentation pour les propriétés contrôlées du modèle idéal. Ils ne constituent pas une validation expérimentale ni une preuve que les paramètres représentent un matériau réel.
-
----
-*Développé et validé sur Termux (Android) via un processus itératif de développement et de relecture critique.*
+# Lancer l'audit de la règle de somme (V71)
+python audit_v61_rigorous.py

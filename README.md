@@ -70,3 +70,16 @@ pip install -r requirements.txt
 python v73_rigorous_validation.py
 python v74_full_bz_stability.py
 python v75_direction_110_test.py
+# 1. Audits structurels et acoustiques
+python audit_v61_rigorous.py
+python v70_phonon_acoustic_validation.py
+
+# 2. Vitesses acoustiques et stabilité du modèle à seconds voisins
+python v73_rigorous_validation.py
+python v74_full_bz_stability.py
+
+# 3. Test d'anisotropie
+python v75_direction_110_test.py
+
+# 4. Figures du README
+python generate_readme_figures.py

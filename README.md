@@ -10,6 +10,7 @@ Ce projet est un moteur de simulation en Python pour calculer des relations de d
 - **Suivi de branches** : affectation optimale des modes par algorithme Kuhn-Munkres (Hongrois). Le traitement des dégénérescences dépend de l’implémentation du suivi modal utilisée ; il doit être vérifié dans le code et les tests avant toute affirmation de continuité branche par branche.
 - **Validation numérique** : hermiticité, règle de somme acoustique, vecteurs de translation rigide, stabilité des valeurs propres et vitesses acoustiques.
 - **Masses du modèle** : \(M_{\mathrm{Cs}} = 132.90545196\) uma et \(M_{\mathrm{Cl}} = 35.45\) uma, converties en kg dans le moteur via \(U = 1.66053906660 \times 10^{-27}\) kg/uma.
+- **Module d’attention (expérimental)** : mini-Transformer en NumPy pur (attention simple ou multi-tête) appliqué à des courbes de dispersion, entraîné en auto-encodeur avec masquage.
 
 ## 📂 Scripts principaux
 
@@ -23,8 +24,9 @@ Ce projet est un moteur de simulation en Python pour calculer des relations de d
 | `v70_phonon_acoustic_validation.py` | Diagnostic acoustique de V61 |
 | `audit_v61_rigorous.py` | Audit de l’invariance par translation de V61 |
 | `v57_production_501.py` | Moteur 1D historique |
+| `attention_phonons.py` | Mini-Transformer (attention simple ou multi-tête) sur courbes de dispersion |
 
-Autres scripts présents dans le dépôt, non décrits ici : `v58_regression_test.py`, `v60_validate_artifacts.py`, `v61_cristal_3d.py`, `run_all.py` et `generate_readme_figures.py`.
+Autres scripts présents dans le dépôt, non décrits ici : `v58_regression_test.py`, `v60_validate_npz.py`, `v61_cristal_3d.py`, `run_all.py` et `generate_readme_figures.py`.
 
 ## 🛡️ Carte des validations
 
@@ -80,6 +82,114 @@ Une grille finie ne prouve pas la stabilité sur tout le continuum de la zone de
 - Les constantes de force des seconds voisins sont illustratives. Avec le jeu de paramètres actuel, le modèle conduit à un \(C_{12}\) négatif.
 - Aucune comparaison quantitative avec Ahmad et al. (1972) n’est revendiquée tant que les points expérimentaux ne sont pas numérisés avec leurs unités, directions cristallographiques et incertitudes.
 
+## 🧠 Module d’attention (expérimental)
+
+Un module complémentaire explore l’application d’un mécanisme d’attention de type Transformer à des courbes de dispersion phononiques. L’objectif n’est pas de remplacer le calcul de la matrice dynamique, mais d’étudier si un modèle d’attention, entraîné de façon non supervisée, peut spontanément mettre en évidence des structures physiquement pertinentes (voisinage dans la zone de Brillouin, similarité de fréquences entre branches, etc.).
+
+### Motivation
+
+Les Transformers ont montré une capacité remarquable à capturer des dépendances à longue portée dans les séquences. Une courbe de dispersion \(\omega(\mathbf{q})\) peut être vue comme une séquence ordonnée de « tokens » indexés par le vecteur d’onde. Il est donc naturel de se demander :
+
+- Est-ce qu’un mécanisme d’attention apprend à se concentrer sur le voisinage local en \(q\) ?
+- Préfère-t-il les points de fréquences proches (croisements ou anti-croisements de branches) ?
+- La structure de la matrice d’attention finale reflète-t-elle la périodicité de la zone de Brillouin ou la symétrie du cristal ?
+
+Ces questions restent ouvertes. Le module actuel fournit un banc d’essai minimal pour les explorer.
+
+### Architecture implémentée
+
+Le code est volontairement écrit en **NumPy pur** (sans PyTorch, JAX ni framework de différenciation automatique). Cela permet une transparence totale sur les calculs de gradients et facilite l’analyse pédagogique.
+
+#### Tokenizer
+
+Chaque point \(q_i\) de la courbe de dispersion est transformé en un vecteur d’embedding de dimension \(d_{\mathrm{model}}\) (typiquement 32 ou 64) à partir des caractéristiques suivantes :
+
+- position normalisée \(q_i / \pi\) ;
+- fréquences des branches (acoustiques et optiques) normalisées ;
+- features de Fourier \(\sin(kq_i)\) et \(\cos(kq_i)\) pour \(k = 1\ldots K\) ;
+- gradients locaux \(\partial\omega / \partial q\) approximés par différences finies.
+
+Une projection linéaire aléatoire fixe (avec graine contrôlée) ramène ensuite le vecteur de caractéristiques à la dimension \(d_{\mathrm{model}}\). Les embeddings sont enfin centrés et réduits.
+
+#### Mécanisme d’attention
+
+Deux variantes sont disponibles :
+
+1. **Attention simple** (une seule tête)
+2. **Attention multi-tête** (typiquement 4 têtes, \(d_k = d_{\mathrm{model}} / h\))
+
+Dans les deux cas, on dispose des projections classiques :
+
+\[
+Q = X W_Q,\quad K = X W_K,\quad V = X W_V
+\]
+
+suivies du calcul des scores, du softmax et de la combinaison avec les valeurs. Une projection de sortie \(W_O\) est appliquée après concaténation des têtes (dans la version multi-tête).
+
+Un token de masquage apprenable (`mask_emb`) peut être utilisé à la place d’un simple vecteur nul. Une connexion résiduelle légère (coefficient 0,3) est optionnellement présente.
+
+#### Optimisation
+
+L’optimiseur **Adam** est implémenté manuellement (moments du premier et du second ordre, biais-correction). Le taux d’apprentissage peut être constant ou décroissant linéairement.
+
+Deux formulations de la perte ont été testées :
+
+- **Perte locale** : on ne supervise que le token masqué (équivalent au Masked Language Modeling).
+- **Perte globale** : on supervise la reconstruction de toute la séquence (auto-encodeur). Cette seconde formulation force l’attention de tous les tokens à s’améliorer et s’est révélée plus stable dans les expériences actuelles.
+
+### Protocole expérimental typique
+
+- Nombre de points \(q\) : 50 à 100
+- Dimension d’embedding : 32 ou 64
+- Nombre d’itérations : 500 à 1000
+- Masquage : généralement le point \(q = 0\) (centre de la zone de Brillouin)
+- Métriques suivies :
+  - perte MSE
+  - entropie moyenne de la matrice d’attention
+  - rang numérique de la matrice d’attention
+  - corrélation de Pearson entre les poids d’attention de la ligne masquée et la distance spatiale \(|q - q_{\mathrm{masqué}}|\)
+  - corrélation avec la distance en fréquence \(\|\omega(q) - \omega(q_{\mathrm{masqué}})\|\)
+
+### Résultats observés
+
+**[Observé numériquement]**
+
+- La perte diminue de façon significative lorsque la perte globale (auto-encodeur) est utilisée.
+- L’entropie de l’attention baisse, indiquant une focalisation progressive.
+- La corrélation entre attention et distance spatiale n’est pas systématiquement forte ni négative. Elle dépend fortement :
+  - du type de masquage (vecteur nul vs token appris),
+  - de la présence d’une connexion résiduelle,
+  - de la formulation de la perte (locale vs globale),
+  - de la dimension du modèle et du nombre de têtes.
+
+Dans certaines configurations, une légère tendance à privilégier le voisinage local apparaît. Dans d’autres, l’attention semble davantage guidée par la similarité des fréquences.
+
+**[Limite]**
+
+Ces observations restent préliminaires. Elles n’ont été réalisées que sur des courbes de dispersion fictives ou issues du modèle à ressorts. Aucune conclusion robuste ne peut encore être tirée quant à la capacité de l’attention à « découvrir » la physique des phonons.
+
+### Limites actuelles du module
+
+- Le tokenizer est heuristique et n’encode pas explicitement la symétrie du réseau ni le caractère vectoriel de \(\mathbf{q}\) en 3D.
+- L’entraînement est effectué sur une seule courbe à la fois (pas de batch ni de variété de matériaux).
+- Aucune régularisation physique (hermiticité, règle de somme, etc.) n’est injectée dans la fonction de perte.
+- Le module ne produit pas de prédiction de fréquences ; il ne fait que reconstruire des embeddings.
+- Les résultats sont sensibles aux hyperparamètres et à l’initialisation.
+
+### Pistes d’évolution
+
+Parmi les directions envisagées (non encore implémentées) :
+
+- Passage à des courbes 3D le long de chemins de haute symétrie (\(\Gamma-X-M-\Gamma-R\), etc.).
+- Utilisation de plusieurs courbes (différents matériaux ou différents jeux de constantes de force) pour forcer une généralisation.
+- Injection de contraintes physiques dans la perte (par exemple pénaliser les attentions qui violent la périodicité de la zone de Brillouin).
+- Comparaison systématique entre attention simple, multi-tête, et architectures plus riches (couches multiples, normalisation, etc.).
+- Étude de l’attention sur des modes propres individuels plutôt que sur la dispersion complète.
+
+### Statut
+
+Le module est **exploratoire et pédagogique**. Il est fourni comme outil d’analyse et de démonstration, non comme une méthode de calcul de dispersion validée. Tous les résultats qui en sont issus doivent être présentés avec les mentions **[Observé numériquement]** ou **[Limite]** appropriées.
+
 ## 🛠️ Installation et lancement
 
 Prérequis : Python 3.9 ou plus récent, NumPy, SciPy et Matplotlib.
@@ -108,7 +218,13 @@ python v74_full_bz_stability.py
 python v75_direction_110_test.py
 ```
 
-### 4. Régénération des figures
+### 4. Module d’attention (expérimental)
+
+```bash
+python attention_phonons.py
+```
+
+### 5. Régénération des figures
 
 ```bash
 python generate_readme_figures.py
@@ -293,6 +409,16 @@ Oui, potentiellement. Des termes à trois corps ou des forces angulaires peuvent
 **[Limite]**
 
 La relation de Cauchy entre constantes élastiques dépend d’hypothèses précises sur les interactions, la symétrie et l’équilibre du réseau. La violation de cette relation ne peut pas être présentée comme une conséquence automatique de l’ajout d’un terme à trois corps.
+
+#### Q15. Que fait le module d’attention ?
+
+**[Observé numériquement]**
+
+Il transforme une courbe de dispersion en séquence d’embeddings, masque un point (généralement \(q=0\)) et entraîne un mécanisme d’attention à reconstruire la séquence. On examine ensuite si les poids d’attention se concentrent sur le voisinage spatial ou sur des fréquences proches.
+
+**[Limite]**
+
+Le module est exploratoire. Il ne constitue pas une méthode de calcul de dispersion et ne permet aucune conclusion physique robuste à ce stade.
 
 ## 📌 Niveau de preuve
 
